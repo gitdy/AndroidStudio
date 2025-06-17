@@ -89,56 +89,104 @@ BUG有很多,请大家多多指出. 提BUG给我哈. (现在都是我自己给�
 
 新增 10.10 计算表达式
 ```
-import subprocess
-import time
+import android.graphics.Paint
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
-def get_android_clipboard():
-    try:
-        output = subprocess.run(
-            ["adb", "shell", "service", "call", "clipboard", "1"],
-            capture_output=True, text=True
-        )
+@Composable
+fun RiskLevelIndicator(
+    productRiskLevel: Int = 3,
+    userRiskTolerance: Int = 4
+) {
+    val boxWidth = 60f
+    val boxHeight = 60f
+    val boxGap = 8f
 
-        if "Parcel" not in output.stdout:
-            return ""
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("Product risk level", fontSize = 14.sp)
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(120.dp)
+                .padding(horizontal = 16.dp)
+        ) {
+            val totalBoxes = 6
+            val startX = (size.width - (boxWidth * totalBoxes + boxGap * (totalBoxes - 1))) / 2f
+            val centerY = size.height / 2f
 
-        lines = output.stdout.split("\n")
-        hex_str = ""
-        for line in lines:
-            if "'" in line:
-                hex_part = line.split("'")[1].replace("\\x", "").replace(".", "").strip()
-                hex_str += hex_part
+            for (i in 0 until totalBoxes) {
+                val x = startX + i * (boxWidth + boxGap)
+                val color = when (i) {
+                    productRiskLevel -> Color(0xFF2B4A78) // 深蓝色
+                    userRiskTolerance -> Color(0xFF4CAF50) // 绿色
+                    else -> Color(0xFFD3D3D3) // 浅灰色
+                }
 
-        if not hex_str:
-            return ""
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(x, centerY - boxHeight / 2),
+                    size = Size(boxWidth, boxHeight),
+                    cornerRadius = CornerRadius(8f, 8f)
+                )
 
-        # 解码 UTF-16
-        bytes_data = bytes.fromhex(hex_str)
-        text = bytes_data.decode("utf-16", errors="ignore")
-        return text.strip()
+                // 绘制数字
+                drawIntoCanvas {
+                    it.nativeCanvas.apply {
+                        val textPaint = Paint().apply {
+                            color = android.graphics.Color.BLACK
+                            textAlign = Paint.Align.CENTER
+                            textSize = 36f
+                            isAntiAlias = true
+                        }
+                        drawText(
+                            "$i",
+                            x + boxWidth / 2,
+                            centerY + 12f,
+                            textPaint
+                        )
+                    }
+                }
+            }
 
-    except Exception as e:
-        print(f"ADB错误：{e}")
-        return ""
+            // 绘制上方箭头（产品风险）
+            val px = startX + productRiskLevel * (boxWidth + boxGap) + boxWidth / 2
+            drawPath(
+                path = Path().apply {
+                    moveTo(px, centerY - boxHeight / 2 - 10)
+                    lineTo(px - 10, centerY - boxHeight / 2 - 30)
+                    lineTo(px + 10, centerY - boxHeight / 2 - 30)
+                    close()
+                },
+                color = Color.Black
+            )
 
-def copy_to_mac_clipboard(text):
-    try:
-        process = subprocess.Popen(['pbcopy'], stdin=subprocess.PIPE)
-        process.communicate(text.encode('utf-8'))
-        print(f"[已同步到 Mac 剪贴板]: {text}\n")
-    except Exception as e:
-        print(f"粘贴板同步失败：{e}")
+            // 绘制下方箭头（用户容忍度）
+            val ux = startX + userRiskTolerance * (boxWidth + boxGap) + boxWidth / 2
+            drawPath(
+                path = Path().apply {
+                    moveTo(ux, centerY + boxHeight / 2 + 10)
+                    lineTo(ux - 10, centerY + boxHeight / 2 + 30)
+                    lineTo(ux + 10, centerY + boxHeight / 2 + 30)
+                    close()
+                },
+                color = Color.Black
+            )
+        }
+        Text("Your risk tolerance", fontSize = 14.sp)
+    }
+}
 
-def start_sync(interval=2):
-    print("开始同步手机剪贴板内容到 Mac 剪贴板（按 Ctrl+C 停止）...")
-    last_content = ""
-    while True:
-        content = get_android_clipboard()
-        if content and content != last_content:
-            copy_to_mac_clipboard(content)
-            last_content = content
-        time.sleep(interval)
-
-if __name__ == "__main__":
-    start_sync()
 ```
