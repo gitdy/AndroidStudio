@@ -88,3 +88,57 @@ BUG有很多,请大家多多指出. 提BUG给我哈. (现在都是我自己给�
 新增 10.9 单步调试工具栏
 
 新增 10.10 计算表达式
+```
+import subprocess
+import time
+
+def get_android_clipboard():
+    try:
+        output = subprocess.run(
+            ["adb", "shell", "service", "call", "clipboard", "1"],
+            capture_output=True, text=True
+        )
+
+        if "Parcel" not in output.stdout:
+            return ""
+
+        lines = output.stdout.split("\n")
+        hex_str = ""
+        for line in lines:
+            if "'" in line:
+                hex_part = line.split("'")[1].replace("\\x", "").replace(".", "").strip()
+                hex_str += hex_part
+
+        if not hex_str:
+            return ""
+
+        # 解码 UTF-16
+        bytes_data = bytes.fromhex(hex_str)
+        text = bytes_data.decode("utf-16", errors="ignore")
+        return text.strip()
+
+    except Exception as e:
+        print(f"ADB错误：{e}")
+        return ""
+
+def copy_to_mac_clipboard(text):
+    try:
+        process = subprocess.Popen(['pbcopy'], stdin=subprocess.PIPE)
+        process.communicate(text.encode('utf-8'))
+        print(f"[已同步到 Mac 剪贴板]: {text}\n")
+    except Exception as e:
+        print(f"粘贴板同步失败：{e}")
+
+def start_sync(interval=2):
+    print("开始同步手机剪贴板内容到 Mac 剪贴板（按 Ctrl+C 停止）...")
+    last_content = ""
+    while True:
+        content = get_android_clipboard()
+        if content and content != last_content:
+            copy_to_mac_clipboard(content)
+            last_content = content
+        time.sleep(interval)
+
+if __name__ == "__main__":
+    start_sync()
+```
